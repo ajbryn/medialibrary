@@ -1,0 +1,190 @@
+version: "3"
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    cap_add:
+      - NET_ADMIN
+    volumes:
+    #   - gluetun:/gluetun
+      - /home/andy/dev/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - OPENVPN_USER=
+      - OPENVPN_PASSWORD=
+      - SERVER_REGIONS=Netherlands
+      - TZ=America/Chicago
+    ports:
+      # QBT UI Port
+      - 8090:8090
+      # Bittorrent port
+      - 6881:6881
+      - 6881:6881/udp
+      # Web port
+      - 8080:8080
+      - 9117:9117
+      # Sonarr port
+      - 8989:8989
+      # Radarr port
+      - 7878:7878
+      # Lidarr port
+      - 8686:8686
+      # Readarr port
+      - 8787:8787
+      # Prowlarr port
+      - 9696:9696
+    restart: unless-stopped
+
+  # run first time with :version-4.6.0-r0
+  # use admin/adminadmin default login
+  # then run again with "latest" or without version
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: qbittorrent
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+      - UMASK_SET=022
+      - WEBUI_PORT=8090
+    volumes:
+      - /home/andy/dev/qbittorrent/data:/config
+      - /home/andy/dev/storage/media:/downloads
+      - /home/andy/dev/storage/media/movies:/movies
+      - /home/andy/dev/storage/media/tv:/tv
+      - /home/andy/dev/storage/media/music:/music
+      - /home/andy/dev/storage/media/books:/books
+      - /home/andy/dev/storage/media/audiobooks:/audiobooks
+    depends_on:
+      - gluetun
+    network_mode: service:gluetun
+    restart: unless-stopped
+
+      
+# music
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+    volumes:
+      - /home/andy/dev/lidarr/appdata/config:/config
+      - /home/andy/dev/storage/:/external-storage
+      - /home/andy/dev/storage/media/music:/music
+      - /home/andy/dev/storage/media/downloads/music:/downloads/music
+    # ports:
+    #   - 8686:8686
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - qbittorrent
+
+# books
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+    volumes:
+      - /home/andy/dev/readarr:/config
+      - /home/andy/dev/storage/:/external-storage
+      - /home/andy/dev/storage/media/books:/books
+      - /home/andy/dev/storage/media/audiobooks:/audiobooks
+      - /home/andy/dev/storage/media/downloads/audiobooks:/downloads/audiobooks
+      - /home/andy/dev/storage/media/downloads/books:/downloads/books
+    # ports:
+    #   - 8787:8787
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - qbittorrent
+
+# tv shows
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+    volumes:
+      - /home/andy/dev/sonarr/data:/config
+      - /home/andy/dev/storage/:/external-storage
+      - /home/andy/dev/storage/media/tv:/tv
+      - /home/andy/dev/storage/media/downloads/tv:/downloads/tv
+    # ports:
+    #   - 8989:8989
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - qbittorrent
+
+# movies
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+    volumes:
+      - /home/andy/dev/radarr/data:/config
+      - /home/andy/dev/storage/:/external-storage
+      - /home/andy/dev/storage/media/movies:/movies
+      - /home/andy/dev/storage/media/downloads/movies:/downloads/movies
+    # ports:
+    #   - 7878:7878
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - qbittorrent
+
+# all media
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=1077
+      - PGID=777
+      - TZ=America/Chicago
+    volumes:
+      - /home/andy/dev/prowlarr/config:/config
+    # ports:
+    #   - 9696:9696
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - qbittorrent
+
+
+  emby:
+    image: emby/embyserver
+    container_name: embyserver
+    environment:
+      - PUID=1077
+      - PGID=777
+      - /home/andy/dev/storage/media/audiobooks:/audiobooks
+      - TZ=America/Chicago
+      - UMASK_SET=022 #optional
+    volumes:
+      - /home/andy/dev/emby/programdata:/config
+      - /home/andy/dev/storage/media/books:/books
+      - /home/andy/dev/storage/media/audiobooks:/audiobooks
+      - /home/andy/dev/storage/media/music:/music
+      - /home/andy/dev/storage/media/tv:/tv
+      - /home/andy/dev/storage/media/movies:/movies
+    ports:
+      - 8097:8096 # HTTP port
+      - 8921:8920 # HTTPS port
+    devices:
+      - /dev/dri:/dev/dri # VAAPI/NVDEC/NVENC render nodes
+    network_mode: host
+    restart: unless-stopped
